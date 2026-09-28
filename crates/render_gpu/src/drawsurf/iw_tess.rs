@@ -759,6 +759,8 @@ pub(super) fn register(app: &mut App) {
             Core3d,
             draw_iw_tess
                 .in_set(Core3dSystems::PostProcess)
+                .in_set(frame::schedule::InterfaceRenderSet::Hud)
+                .after(frame::schedule::InterfaceRenderSet::Glass)
                 .after(super::postfx::PostFxSet),
         );
 }

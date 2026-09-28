@@ -675,46 +675,40 @@ pub(crate) fn update_weaponbar(
         hide_ammo,
     };
 
-    let mut list = crate::draw2d::Draw2dList::default();
-    let mut weaponbar_vis = false;
-    let mut weaponbar_failed = false;
-    let mut ring_cmds = 0usize;
-    if let Some(menu) = catalog.get(WEAPONBAR_HD_MENU) {
-        host.menu = Some(menu);
-        let mut hook = |args: OwnerDrawArgs<'_>, frame: &mut ChromeFrame| {
-            let ring = args.item.owner_draw == OWNERDRAW_COMPASS_RING;
-            let before = frame.list.cmds.len();
-            let out = paint_owner(&owner_state, args, frame);
-            if ring {
-                ring_cmds += frame.list.cmds.len().saturating_sub(before);
-            }
-            out
-        };
-        let frame = execute_chrome_menu_ex(
-            menu,
-            &host,
+    let mut list = if !hide_ammo
+        && ps.health > 0
+        && !host.in_killcam
+        && !host.missilecam
+        && !host.game_ended
+    {
+        crate::modern::weaponbar(
             &surface,
-            ChromeAssets {
-                catalog: Some(catalog),
-                localize: strings.as_ref().map(|s| &s.0),
-            },
-            ChromeMenuAnim::IDENTITY,
-            &mut exprs,
-            MenuVisOnError::HideAll,
-            Some(&mut hook),
-        );
-        if let Some(error) = chrome_error(&frame) {
-            weaponbar_failed = true;
-            gaps.raise(GapCause::WeaponbarPaint { error });
-        }
-        weaponbar_vis =
-            frame.coverage.vis_false < frame.coverage.items_total || !frame.list.cmds.is_empty();
-        list.cmds.extend(frame.list.cmds);
+            catalog,
+            owner_state.ammo.as_ref(),
+            owner_state.name.as_deref(),
+            [frag_ammo, smoke_ammo],
+            [ps.offhand_primary, ps.offhand_secondary].map(|class| {
+                weapons.as_deref().and_then(|w| {
+                    offhand_weapon_index(ps, w, class).and_then(|id| {
+                        w.0.hud_icon_image_of(id)
+                            .zip(w.0.namespace_of(id))
+                            .map(|(name, ns)| {
+                                assets::AssetKey {
+                                    namespace: ns,
+                                    kind: assets::AssetKind::Material,
+                                    name: format!("glass_equipment_{name}"),
+                                }
+                                .display()
+                            })
+                    })
+                })
+            }),
+            client_input.input.as_deref(),
+        )
     } else {
-        gaps.raise(GapCause::CompassRingNoMenu {
-            name: WEAPONBAR_HD_MENU.to_owned(),
-        });
-    }
+        crate::draw2d::Draw2dList::default()
+    };
+    let mut weaponbar_failed = false;
 
     for name in ["dpad_hd", "javelin_overlay_hd"] {
         let Some(menu) = catalog.get(name) else {
@@ -834,13 +828,14 @@ pub(crate) fn update_weaponbar(
             if fonts.contains_key(font) {
                 continue;
             }
-            if let Some(def) = catalog.font(font) {
+            if let Some(def) = crate::glass_assets::font_named(font).or_else(|| catalog.font(font))
+            {
                 fonts.insert(font.clone(), def);
             }
         }
     }
 
-    if (!ring_miss && ring_cmds > 0) || !weaponbar_vis {
+    if !ring_miss {
         gaps.clear(HudGap::CompassRing);
     }
     if !weaponbar_failed {

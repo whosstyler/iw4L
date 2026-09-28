@@ -495,6 +495,10 @@ pub(crate) fn route_ui_commands(
                     ui.4.write(MenuShellCmd::Accept);
                     echo("menu: accept".into(), console, line);
                 }
+                Ok(MenuVerb::Map) => {
+                    ui.4.write(MenuShellCmd::ToggleMap);
+                    echo("menu: map".into(), console, line);
+                }
                 Ok(MenuVerb::Back) => {
                     ui.4.write(MenuShellCmd::Back);
                     echo("menu: back".into(), console, line);
@@ -1348,7 +1352,7 @@ pub fn register_feature_commands(registry: &mut crate::ConsoleRegistry, maps: &[
         ),
         (
             "menu",
-            "menu [open <screen> | nav up|down|left|right | accept | back | device pad|mouse | dump] — shell surface; back/device remain typed gaps (S2/S4)",
+            "menu [open <screen> | nav up|down|left|right | accept | back | map | device pad|mouse | dump] — shell surface; back/device remain typed gaps (S2/S4)",
         ),
         (
             "hurt",
@@ -1491,10 +1495,11 @@ fn parse_finite(s: &String) -> Result<f32, String> {
         .ok_or_else(|| format!("bot: not a finite number `{s}`"))
 }
 
-const MENU_USAGE: &str = "usage: menu [open <screen> | nav up|down|left|right | accept | back | device pad|mouse | dump]";
+const MENU_USAGE: &str = "usage: menu [open <screen> | nav up|down|left|right | accept | back | map | device pad|mouse | dump]";
 
 #[derive(Debug, PartialEq)]
 enum MenuVerb {
+    Map,
     Status,
     Dump,
     Open(String),
@@ -1535,6 +1540,7 @@ fn parse_menu_args(args: &[String]) -> Result<MenuVerb, String> {
         }
         "accept" if args.len() == 1 => Ok(MenuVerb::Accept),
         "back" if args.len() == 1 => Ok(MenuVerb::Back),
+        "map" if args.len() == 1 => Ok(MenuVerb::Map),
         "device" => match args.get(1).map(String::as_str) {
             Some("pad") | Some("mouse") if args.len() == 2 => Ok(MenuVerb::Device(args[1].clone())),
             _ => Err("usage: menu device pad|mouse".into()),

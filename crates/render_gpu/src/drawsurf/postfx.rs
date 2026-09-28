@@ -802,6 +802,7 @@ pub(super) fn register(app: &mut App) {
             Core3d,
             draw_postfx
                 .in_set(PostFxSet)
+                .in_set(frame::schedule::InterfaceRenderSet::SceneEffects)
                 .in_set(Core3dSystems::PostProcess)
                 .after(tonemapping),
         );

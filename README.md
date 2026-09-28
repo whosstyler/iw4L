@@ -4,8 +4,12 @@ This is [whosstyler's custom fork](https://github.com/whosstyler/iw4L) of
 [vladtrc/iw4L](https://github.com/vladtrc/iw4L). It preserves the upstream runtime
 and history while developing a custom interface and gameplay presentation.
 
-Current additions include a frosted-glass pause menu, weapon inspection, and
-viewmodel glTF export. The gameplay HUD and tactical map redesigns are in development.
+Current additions include a frosted-glass pause menu, matching gameplay HUD and
+tactical map, weapon inspection, and viewmodel glTF export.
+
+Press **Esc** for the pause menu, **F1** to toggle the tactical map, or **F2**
+from pause for the player list. The HUD displays live scores, ammunition, and
+equipment bindings. The tactical map shows your position, teammates, and objectives.
 The original project's credits, Apache-2.0 license, and notices are retained below.
 Game data is not included; a compatible installation is required.
 

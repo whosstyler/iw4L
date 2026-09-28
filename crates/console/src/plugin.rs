@@ -428,6 +428,15 @@ fn publish_client_action_input(
     mut out: ResMut<ClientActionInput>,
 ) {
     hud_input.menu_open = menu.0;
+    if binds.is_changed() || hud_input.grenade_keys.iter().all(Option::is_none) {
+        hud_input.grenade_keys = ["+frag", "+smoke"].map(|command| {
+            binds
+                .iter()
+                .filter(|(button, _)| binds.binding_name(*button) == Some(command))
+                .map(|(button, _)| crate::binds::display_button(button).to_uppercase())
+                .min()
+        });
+    }
     if binds.is_changed() || hud_input.use_key.is_none() {
         hud_input.use_key = binds
             .iter()

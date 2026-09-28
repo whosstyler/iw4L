@@ -419,8 +419,38 @@ impl HudImages {
     }
 
     fn decode_iwd_rgba(&self, ns: AssetNamespace, name: &str) -> CachedRgba {
+        if let Some(source) = name
+            .strip_prefix("glass_mono_")
+            .or_else(|| name.strip_prefix("glass_equipment_"))
+        {
+            let (w, h, mut rgba) = (ns == HUD_CHROME_NAMESPACE)
+                .then(|| {
+                    self.zone_lookup(source)
+                        .map(|(w, h, pixels)| (w, h, pixels.to_vec()))
+                })
+                .flatten()
+                .or_else(|| self.decode_iwd_rgba(ns, source))?;
+            for pixel in rgba.chunks_exact_mut(4) {
+                let gray = (pixel[0] as f32 * 0.2126
+                    + pixel[1] as f32 * 0.7152
+                    + pixel[2] as f32 * 0.0722)
+                    .round() as u8;
+                pixel[..3].fill(if name.starts_with("glass_equipment_") {
+                    170 + (gray as f32 / 3.0).round() as u8
+                } else {
+                    gray
+                });
+            }
+            return Some((w, h, rgba));
+        }
         if cache_key(name) == "white" {
             return Some((1, 1, vec![255; 4]));
+        }
+        if let Some(surface) = crate::glass_assets::image(name) {
+            return Some(surface);
+        }
+        if let Some(icon) = crate::modern::icon_pixels(name) {
+            return Some(icon);
         }
         let main = self.trees.main_for(ns)?;
         let mapped = (ns == HUD_CHROME_NAMESPACE)

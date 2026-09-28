@@ -313,6 +313,9 @@ fn spawn_widget(
                 UI_PASS_FOCUS,
                 Pickable::IGNORE,
             ));
+            image.insert(UiTransform::from_rotation(Rot2::degrees(
+                widget.style.image_rotation_degrees,
+            )));
             if let WidgetAnimation::PulseAlpha { radians_per_second } = widget.style.animation {
                 image.insert(RetailPulseAlpha {
                     rgb: [

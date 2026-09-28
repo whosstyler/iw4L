@@ -60,6 +60,7 @@ impl NavDir {
 
 #[derive(Message, Clone, Debug, PartialEq, Eq)]
 pub enum MenuShellCmd {
+    ToggleMap,
     Nav(NavDir),
     Accept,
     Back,
@@ -341,7 +342,7 @@ pub(crate) fn sync_hover_and_nav(
             }
             MenuShellCmd::Nav(_) => {}
             MenuShellCmd::Accept => accept = true,
-            MenuShellCmd::Back => {}
+            MenuShellCmd::Back | MenuShellCmd::ToggleMap => {}
         }
     }
     if !captures_all && (keys.just_pressed(KeyCode::ArrowUp) || keys.just_pressed(KeyCode::KeyW)) {

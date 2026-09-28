@@ -108,6 +108,8 @@ pub(crate) fn update_compass(
     mut pass: ResMut<HudTessPass>,
     view: Option<Res<frame::ViewSubject>>,
     local_vars: Res<crate::playercard::UiLocalVars>,
+    identity: Option<Res<frame::LaunchIdentity>>,
+    strings: Option<Res<assets::PreparedLocalizedStrings>>,
 ) {
     take_fire_pings(
         &mut ping_bus,
@@ -404,6 +406,82 @@ pub(crate) fn update_compass(
         hide(&mut pass);
         return;
     }
+    let catalog = catalog.as_deref().unwrap();
+    let mut chrome = crate::modern::Paint::new(&surface, catalog);
+    chrome.panel(frame::glass::HUD_PANELS[0]);
+    let source = surface.apply_rect(
+        map_item.rect.x,
+        map_item.rect.y,
+        map_item.rect.w * COMPASS_SIZE_DEFAULT,
+        map_item.rect.h * COMPASS_SIZE_DEFAULT,
+        map_item.rect.horz_align as i32,
+        map_item.rect.vert_align as i32,
+    );
+    let target = chrome.rect([14.0, 25.0, 122.0, 91.0]);
+    let transform = |p: [f32; 2]| {
+        [
+            target[0] + (p[0] - source.x) * target[2] / source.w,
+            target[1] + (p[1] - source.y) * target[3] / source.h,
+        ]
+    };
+    for quad in &mut quads {
+        quad.xy = quad.xy.map(transform);
+        quad.clip = Some([
+            target[0],
+            target[1],
+            target[0] + target[2],
+            target[1] + target[3],
+        ]);
+        let player = matches!(&quad.provenance, Draw2dProvenance::MenuItem {index,..} if items.player.is_some_and(|(i,_)|i==*index));
+        let friendly = matches!(quad.provenance, Draw2dProvenance::OwnerDraw(158));
+        if player || friendly {
+            quad.material = if player { "glass_arrow" } else { "glass_dot" }.into();
+            quad.material_namespace = crate::images::HUD_CHROME_NAMESPACE;
+            quad.color = [0.35, 0.88, 0.96, quad.color[3]];
+        }
+    }
+    let heading = (drawable.north_yaw - ps.viewangles[1]).rem_euclid(360.0);
+    let names = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+    for i in -1..=2 {
+        let step = (heading / 45.0).floor() as i32 + i;
+        let x = 70.0 + (step as f32 * 45.0 - heading) * 0.66;
+        if (17.0..130.0).contains(&x) {
+            chrome.text(
+                x,
+                12.0,
+                8.0,
+                names[step.rem_euclid(8) as usize],
+                crate::modern::MUTED,
+                false,
+            );
+            chrome.pic([x + 3.0, 22.0, 0.5, 2.0], "white", crate::modern::MUTED);
+        }
+    }
+    chrome.pic([70.0, 23.0, 8.0, 1.0], "white", crate::modern::CYAN);
+    let map_name = crate::modern::map_name(identity.as_deref(), strings.as_deref());
+    chrome.text_fit(20.0, 118.0, 110.0, 7.0, &map_name, crate::modern::WHITE);
+    if let Some(snapshot) = presented.snapshot() {
+        chrome.pic(frame::glass::HUD_PANELS[3], "glass_banner", [1.0; 4]);
+        chrome.text_fit(
+            -242.0,
+            18.0,
+            220.0,
+            8.0,
+            &format!(
+                "{}   |   {}   |   {}",
+                snapshot.meta.kind.display_name().to_uppercase(),
+                map_name,
+                crate::modern::remaining(snapshot)
+            ),
+            crate::modern::WHITE,
+        );
+    }
+    let mut combined = chrome.quads();
+    combined.extend(quads);
+    for quad in &combined {
+        let _ = hud_images.get(quad.material_namespace, &quad.material, &mut images);
+    }
+    quads = combined;
     gaps.clear(HudGap::CompassMap);
     pass.compass = TessJob::Quads(quads);
 }

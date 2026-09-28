@@ -424,6 +424,7 @@ pub struct HudInputView {
     pub use_key: Option<String>,
     pub menu_open: bool,
     pub action_slot_keys: [Option<String>; 4],
+    pub grenade_keys: [Option<String>; 2],
 }
 
 /// Authority navigation is prepared while the loading screen is still active.

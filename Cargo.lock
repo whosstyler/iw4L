@@ -3220,6 +3220,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 name = "hud"
 version = "0.1.0"
 dependencies = [
+ "ab_glyph",
  "assets",
  "bevy",
  "diag",
@@ -6218,6 +6219,7 @@ dependencies = [
  "chrono",
  "diag",
  "frame",
+ "hud_iw4",
  "net",
  "session",
  "sim",

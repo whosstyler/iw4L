@@ -25,6 +25,7 @@ mod retail_menu;
 mod screen;
 mod screens;
 mod stack;
+mod tactical;
 
 pub use class_icons::{
     ClassSelectIconCache, UiAssetRoot, cac_attachment_image, cac_material_iwd_stem,

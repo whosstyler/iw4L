@@ -14,7 +14,7 @@ pub(crate) const PANELS: [[f32; 4]; 3] = [
     [-260.0, 233.0, 238.0, 201.0],
 ];
 
-fn widget(id: &str, r: [f32; 4], text: &str, size: f32) -> Widget {
+pub(crate) fn widget(id: &str, r: [f32; 4], text: &str, size: f32) -> Widget {
     Widget {
         id: id.into(),
         rect: Rect640 {
@@ -44,29 +44,29 @@ fn widget(id: &str, r: [f32; 4], text: &str, size: f32) -> Widget {
         focus_order: None,
     }
 }
-fn panel(id: &str, rect: [f32; 4], rounded: bool) -> Widget {
+pub(crate) fn panel(id: &str, rect: [f32; 4], rounded: bool) -> Widget {
     let mut w = widget(id, rect, "", 0.0);
     w.content = Content::Panel;
     // The scene shader supplies the frost; this tint also provides a readable fallback.
-    w.style.fore_color = [0.075, 0.085, 0.095, 0.66];
-    w.style.border_color = [0.51, 0.56, 0.60, 0.48];
+    w.style.fore_color = frame::glass::TINT;
+    w.style.border_color = frame::glass::BORDER;
     w.style.corner_radius = if rounded { 2.5 } else { 0.0 };
     w
 }
-fn art(id: &str, rect: [f32; 4], image: &str) -> Widget {
+pub(crate) fn art(id: &str, rect: [f32; 4], image: &str) -> Widget {
     let mut w = widget(id, rect, "", 0.0);
     w.content = Content::Image;
     w.style.background = image.into();
     w.style.image_contain = true;
     w
 }
-fn line(id: &str, r: [f32; 4]) -> Widget {
+pub(crate) fn line(id: &str, r: [f32; 4]) -> Widget {
     let mut w = panel(id, r, false);
     w.style.fore_color = [0.54, 0.59, 0.62, 0.44];
     w.style.border_color = [0.0; 4];
     w
 }
-fn screen(id: &str, widgets: Vec<Widget>) -> Screen {
+pub(crate) fn screen(id: &str, widgets: Vec<Widget>) -> Screen {
     Screen {
         id: id.into(),
         layer: crate::UiLayer::Shell,
@@ -79,7 +79,7 @@ fn screen(id: &str, widgets: Vec<Widget>) -> Screen {
         on_back: vec![ScreenCmd::Back],
     }
 }
-fn base() -> Vec<Widget> {
+pub(crate) fn base() -> Vec<Widget> {
     let mut dim = panel("ingame_options/dim", [0.0, 0.0, 640.0, 480.0], false);
     dim.rect.horz_align = 4;
     dim.rect.vert_align = 4;
@@ -221,7 +221,7 @@ pub(crate) fn options(info: Option<&InGameMenuInfo>) -> Screen {
         row.focusable = true;
         row.focus_order = Some(i as u32);
         row.style.fill_color = [0.075, 0.085, 0.095, 0.65];
-        row.style.border_color = [0.51, 0.56, 0.60, 0.48];
+        row.style.border_color = frame::glass::BORDER;
         row.style.text_align_x = 42.0;
         row.style.text_align_y = 12.0;
         row.style.bold = i == 0;
@@ -344,11 +344,13 @@ pub(crate) fn options(info: Option<&InGameMenuInfo>) -> Screen {
 }
 
 pub(crate) fn detail(id: &str, info: Option<&InGameMenuInfo>) -> Screen {
+    if id == "pause_map" {
+        return crate::tactical::build(info.unwrap_or(&InGameMenuInfo::default()));
+    }
     let mut widgets = base();
     let empty = InGameMenuInfo::default();
     let info = info.unwrap_or(&empty);
     let title = match id {
-        "pause_map" => "MAP OVERVIEW",
         "pause_social" => "SOCIAL",
         _ => "SCOREBOARD",
     };
@@ -356,17 +358,7 @@ pub(crate) fn detail(id: &str, info: Option<&InGameMenuInfo>) -> Screen {
     heading.style.bold = true;
     widgets.push(heading);
     widgets.push(panel("pause/detail_card", [38.0, 83.0, 778.0, 345.0], true));
-    if id == "pause_map" {
-        if let Some(compass) = &info.compass {
-            widgets.push(art("pause/full_map", [260.0, 96.0, 330.0, 320.0], compass));
-        }
-        widgets.push(widget(
-            "pause/detail_map_name",
-            [53.0, 98.0, 200.0, 20.0],
-            &info.map.to_uppercase(),
-            13.0,
-        ));
-    } else {
+    {
         widgets.push(widget(
             "pause/columns",
             [54.0, 98.0, 300.0, 17.0],
@@ -490,7 +482,15 @@ fn symbol(kind: &str, p: Vec2) -> bool {
     let circle = |x: f32, y: f32, r: f32| p.distance(Vec2::new(x, y)) < r;
     let rect = |x: f32, y: f32, w: f32, h: f32| p.x > x && p.x < x + w && p.y > y && p.y < y + h;
     match kind {
+        "dot" => circle(0.5, 0.5, 0.45),
+        "cone" => p.y < 0.5 && (p.x - 0.5).abs() < (0.5 - p.y) * 0.7 && circle(0.5, 0.5, 0.49),
         "play" => polygon(p, &[[0.25, 0.15], [0.80, 0.5], [0.25, 0.85]]),
+        "player" => {
+            p.y > 0.08
+                && p.y < 0.87
+                && (p.x - 0.5).abs() < (p.y - 0.08) * 0.46
+                && !(p.y > 0.42 && (p.x - 0.5).abs() < (p.y - 0.42) * 0.45)
+        }
         "north" => polygon(p, &[[0.5, 0.12], [0.90, 0.88], [0.5, 0.70], [0.1, 0.88]]),
         "people" => {
             circle(0.34, 0.30, 0.14)
@@ -605,10 +605,15 @@ pub(crate) fn refresh_match_details(
         && stack.names.last().is_some_and(|name| {
             matches!(
                 name.as_str(),
-                "ingame_options" | "pause_social" | "pause_scoreboard"
+                "ingame_options" | "pause_social" | "pause_scoreboard" | "pause_map"
             )
         })
-        && time.elapsed_secs_f64() - *last >= 1.0
+        && time.elapsed_secs_f64() - *last
+            >= if stack.names.last().is_some_and(|n| n == "pause_map") {
+                0.1
+            } else {
+                1.0
+            }
     {
         *last = time.elapsed_secs_f64();
         let mut signature = chrono::Local::now().format("%Y%m%d%H%M").to_string();
@@ -619,6 +624,9 @@ pub(crate) fn refresh_match_details(
                 "|{}|{}",
                 snapshot.meta.score_limit, snapshot.meta.time_limit_ms
             );
+            if stack.names.last().is_some_and(|n| n == "pause_map") {
+                let _ = write!(signature, "|{}", snapshot.tick.0);
+            }
             for (id, player) in &snapshot.meta.clients {
                 let _ = write!(
                     signature,

@@ -16,6 +16,8 @@ mod killcam_skip;
 mod killfeed;
 mod mantle_hint;
 mod match_start;
+mod modern;
+mod glass_assets;
 mod overhead_names;
 mod playercard;
 mod plugin;

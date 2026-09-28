@@ -70,6 +70,7 @@ pub struct Style {
     pub text_align_y: f32,
 
     pub image_contain: bool,
+    pub image_rotation_degrees: f32,
     pub text_wrap: bool,
 
     pub background: String,

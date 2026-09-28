@@ -33,7 +33,10 @@ impl Plugin for FrostedGlassPlugin {
                 .add_systems(
                     Core3d,
                     draw_glass
-                        .after(Core3dSystems::PostProcess)
+                        .in_set(Core3dSystems::PostProcess)
+                        .in_set(frame::schedule::InterfaceRenderSet::Glass)
+                        .after(frame::schedule::InterfaceRenderSet::SceneEffects)
+                        .before(frame::schedule::InterfaceRenderSet::Hud)
                         .before(bevy::ui_render::render_pass::ui_pass)
                         .before(upscaling),
                 );
@@ -44,54 +47,99 @@ impl Plugin for FrostedGlassPlugin {
 #[derive(Component, Clone, Copy, ExtractComponent, ShaderType)]
 struct FrostedGlass {
     // Rectangles in physical pixels, matching the UI's viewport anchors.
-    rects: [Vec4; 3],
+    rects: [Vec4; 7],
     viewport: Vec4,
 }
 fn sync_glass(
     mut commands: Commands,
     enabled: Res<crate::MenuEnabled>,
+    screen: Res<frame::AppScreen>,
+    ui_draw: Res<frame::UiDraw>,
+    view: Option<Res<frame::ViewSubject>>,
+    presented: Option<Res<net::PresentedSnapshot>>,
+    local: Option<Res<net::LocalPresentClient>>,
     stack: Res<crate::RetailMenuStack>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    cameras: Query<(Entity, Option<&FrostedGlass>), With<Camera3d>>,
+    cameras: Query<Entity, With<Camera3d>>,
 ) {
     let top = stack.names.last().map(String::as_str);
-    let active = enabled.0
-        && matches!(
-            top,
-            Some(
-                "ingame_options" | "pause_map" | "pause_social" | "pause_scoreboard" | "leave_game"
-            )
-        );
+    let gameplay = !enabled.0
+        && *screen == frame::AppScreen::InGame
+        && ui_draw.0
+        && presented
+            .as_deref()
+            .zip(local.as_deref())
+            .is_some_and(|(p, l)| p.alive_player(l.0).is_some())
+        && !view.is_some_and(|v| v.in_killcam());
+    let active = ui_draw.0
+        && (gameplay
+            || enabled.0
+                && matches!(
+                    top,
+                    Some(
+                        "ingame_options"
+                            | "pause_map"
+                            | "pause_social"
+                            | "pause_scoreboard"
+                            | "leave_game"
+                    )
+                ));
     let Ok(window) = windows.single() else {
         return;
     };
     let w = window.resolution.physical_width() as f32;
     let h = window.resolution.physical_height() as f32;
     let scale = crate::model::Canvas::Viewport.scale(w, h);
-    let mut rects = crate::pause::PANELS.map(|[x, y, rw, rh]| {
+    let panels = if gameplay {
+        frame::glass::HUD_PANELS
+    } else {
+        [
+            crate::pause::PANELS[0],
+            crate::pause::PANELS[1],
+            crate::pause::PANELS[2],
+            [0.0; 4],
+            [0.0; 4],
+            [0.0; 4],
+            [0.0; 4],
+        ]
+    };
+    let mut rects = panels.map(|[x, y, rw, rh]| {
         Vec4::new(
             if x < 0.0 { w + x * scale } else { x * scale },
-            y * scale,
+            if y < 0.0 { h + y * scale } else { y * scale },
             rw * scale,
             rh * scale,
         )
     });
-    if matches!(top, Some("pause_map" | "pause_social" | "pause_scoreboard")) {
-        rects = [
-            Vec4::new(38.0, 83.0, 778.0, 345.0) * scale,
-            Vec4::ZERO,
-            Vec4::ZERO,
-        ];
+    if !gameplay && matches!(top, Some("pause_map" | "pause_social" | "pause_scoreboard")) {
+        rects = [Vec4::ZERO; 7];
+        rects[0] = if top == Some("pause_map") {
+            Vec4::new(29.0, 23.0, 418.0, 424.0)
+        } else {
+            Vec4::new(38.0, 83.0, 778.0, 345.0)
+        } * scale;
     }
-    for (entity, present) in &cameras {
-        if active {
-            commands.entity(entity).insert(FrostedGlass {
-                rects,
-                viewport: Vec4::new(w, h, scale, 0.0),
-            });
-        } else if present.is_some() {
-            commands.entity(entity).remove::<FrostedGlass>();
-        }
+    // ExtractComponent copies updates but does not remove a render-world component
+    // merely because it disappeared from the main-world query. Always extract an
+    // explicit disabled state, so closing a menu cannot leave its old blur alive.
+    for entity in &cameras {
+        commands.entity(entity).insert(FrostedGlass {
+            rects: if active { rects } else { [Vec4::ZERO; 7] },
+            viewport: Vec4::new(
+                w,
+                h,
+                scale,
+                if !active {
+                    -1.0
+                } else if gameplay {
+                    0.0
+                } else if top == Some("pause_map") {
+                    2.0
+                } else {
+                    1.0
+                },
+            ),
+        });
     }
 }
 
@@ -159,7 +207,11 @@ fn init_pipeline(
     });
 }
 fn draw_glass(
-    view: ViewQuery<(&ViewTarget, &DynamicUniformIndex<FrostedGlass>)>,
+    view: ViewQuery<(
+        &ViewTarget,
+        &DynamicUniformIndex<FrostedGlass>,
+        &FrostedGlass,
+    )>,
     pipeline: Option<Res<GlassPipeline>>,
     cache: Res<PipelineCache>,
     uniforms: Res<ComponentUniforms<FrostedGlass>>,
@@ -168,7 +220,10 @@ fn draw_glass(
     let Some(pipeline) = pipeline else {
         return;
     };
-    let (target, index) = view.into_inner();
+    let (target, index, glass) = view.into_inner();
+    if glass.viewport.w < 0.0 {
+        return;
+    }
     let Some((_, ids)) = pipeline
         .variants
         .iter()

@@ -170,6 +170,13 @@ pub(crate) fn spawn_retail_shell(
             }
         }
     }
+    if let (Some(presented), Some(local), Some(compass)) = (
+        paint.presented.as_deref(),
+        paint.local.as_deref(),
+        paint.compass.as_deref(),
+    ) {
+        match_info.tactical = crate::tactical::gather(presented, local.0, compass);
+    }
     let host = Host {
         in_game,
         match_info: in_game.then_some(&match_info),
@@ -658,6 +665,7 @@ fn run_screen_cmds(
                 | UiIntent::CommitPlayerNameEdit(_)
                 | UiIntent::CancelPlayerNameEdit
                 | UiIntent::Disconnect
+                | UiIntent::ResumeMatch
                 | UiIntent::SelectClass(_),
             ) => {}
             ScreenCmd::Emit(intent) => {
@@ -808,9 +816,11 @@ pub(crate) fn handle_menu_back(
         return;
     };
     let maps = maps.as_ref().map(|m| m.0.as_slice()).unwrap_or(&[]);
+    let mut map_toggle = keys.just_pressed(KeyCode::F1);
     let mut back = keys.just_pressed(KeyCode::Escape);
     let mut left = keys.just_pressed(KeyCode::ArrowLeft) || keys.just_pressed(KeyCode::KeyA);
     for cmd in cmds.read() {
+        map_toggle |= matches!(cmd, crate::nav::MenuShellCmd::ToggleMap);
         if matches!(cmd, crate::nav::MenuShellCmd::Back) {
             back = true;
         }
@@ -819,7 +829,11 @@ pub(crate) fn handle_menu_back(
         }
     }
     if !occupancy.enabled.0 {
-        if back && *occupancy.screen == frame::AppScreen::InGame {
+        if map_toggle && *occupancy.screen == frame::AppScreen::InGame {
+            stack.names.push("pause_map".into());
+            occupancy.enabled.0 = true;
+            focus.widget = None;
+        } else if back && *occupancy.screen == frame::AppScreen::InGame {
             stack.names.push("ingame_options".into());
             occupancy.enabled.0 = true;
             focus.widget = Some("ingame_options/resume".into());
@@ -829,8 +843,14 @@ pub(crate) fn handle_menu_back(
     if *occupancy.screen == frame::AppScreen::ClassSelect {
         return;
     }
+    if stack.names.last().map(String::as_str) == Some("pause_map") && (back || map_toggle) {
+        stack.names.pop();
+        occupancy.enabled.0 = stack.names.iter().any(|n| n == "ingame_options");
+        focus.widget = occupancy.enabled.0.then(|| "ingame_options/resume".into());
+        return;
+    }
     if stack.names.last().map(String::as_str) == Some("ingame_options") {
-        let target = if keys.just_pressed(KeyCode::F1) {
+        let target = if map_toggle {
             Some("pause_map")
         } else if keys.just_pressed(KeyCode::F2) {
             Some("pause_social")

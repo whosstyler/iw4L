@@ -1250,6 +1250,7 @@ const ACTION_BINDS: &[(u32, &str)] = &[
     (7, "Throw Special Grenade"),
     (61, "Show Objectives/Scores"),
     (63, "Voice Chat"),
+    (78, "Inspect Weapon"),
 ];
 
 const LOOK_BINDS: &[(u32, &str)] = &[
@@ -3142,6 +3143,7 @@ fn button(
 
 #[derive(Clone, Debug, Default)]
 pub struct InGameMenuInfo {
+    pub tactical: Option<crate::tactical::TacticalInfo>,
     pub zone: String,
     pub score_limit: Option<i32>,
     pub time_limit_ms: Option<u32>,

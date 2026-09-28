@@ -11,6 +11,7 @@ bevy.workspace = true
 assets.workspace = true
 frame.workspace = true
 net = { path = "../net" }
+hud_iw4 = { path = "../hud_iw4" }
 session.workspace = true
 sim.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
