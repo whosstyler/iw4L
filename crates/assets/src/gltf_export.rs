@@ -17,6 +17,10 @@ use crate::{
     TS_COLOR_MAP,
 };
 
+mod viewmodel;
+
+pub use viewmodel::{ViewmodelExportSummary, export_prepared_viewmodel_gltf};
+
 const INCHES_TO_METERS: f32 = 0.0254;
 type PlacementTrs = ([f32; 3], [f32; 4], [f32; 3]);
 

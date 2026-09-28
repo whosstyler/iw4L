@@ -12,4 +12,5 @@ pub mod scene_submission;
 pub mod view_kick_state;
 pub mod view_sway;
 pub mod viewmodel_controller;
+pub mod weapon_inspect;
 pub mod xmodel_pose;

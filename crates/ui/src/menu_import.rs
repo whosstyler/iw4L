@@ -136,6 +136,7 @@ fn import_item(menu: &str, index: usize, item: &MenuItem, expr_dvars: &str) -> W
             background: assets::AssetRef::bare_name(&item.background).to_owned(),
             text_key: item.text_key.clone(),
             animation: Default::default(),
+            ..Style::default()
         },
         content,
         focusable,

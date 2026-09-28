@@ -62,6 +62,9 @@ impl<'a> Host<'a> {
 pub fn lookup(id: &str, host: Host<'_>) -> Option<Screen> {
     match id {
         "ingame_options" => Some(ingame_options(host.match_info)),
+        "pause_map" | "pause_social" | "pause_scoreboard" => {
+            Some(crate::pause::detail(id, host.match_info))
+        }
         "ingame_class" => Some(ingame_class(host)),
         "leave_game" => Some(leave_game()),
         "quit_confirm" => Some(quit_confirm()),
@@ -3139,6 +3142,10 @@ fn button(
 
 #[derive(Clone, Debug, Default)]
 pub struct InGameMenuInfo {
+    pub zone: String,
+    pub score_limit: Option<i32>,
+    pub time_limit_ms: Option<u32>,
+    pub players: Vec<PausePlayer>,
     pub mode: String,
     pub description: Option<String>,
     pub map: String,
@@ -3146,125 +3153,16 @@ pub struct InGameMenuInfo {
     pub compass: Option<String>,
 }
 
-pub fn ingame_options(info: Option<&InGameMenuInfo>) -> Screen {
-    let mut widgets = vec![
-        dim("ingame_options/dim"),
-        retail_title("ingame_options/title", 64.0, 28.0, 148.0, "OPTIONS"),
-        label(
-            "ingame_options/back",
-            96.0,
-            432.0,
-            160.0,
-            20.0,
-            0.375,
-            "BACK - ESC",
-        ),
-    ];
+#[derive(Clone, Debug)]
+pub struct PausePlayer {
+    pub name: String,
+    pub score: i32,
+    pub kills: i32,
+    pub deaths: i32,
+}
 
-    for mut glow in retail_lobby_background("ingame_options")
-        .into_iter()
-        .filter(|w| w.id.contains("/glow_"))
-    {
-        glow.rect.horz_align = 4;
-        glow.rect.vert_align = 4;
-        widgets.insert(1, glow);
-    }
-    if let Some(info) = info {
-        let mut mode = retail_title("ingame_options/mode", 414.0, 28.0, 272.0, &info.mode);
-        mode.style.text_align_mode = 4;
-        mode.style.text_align_x = 0.0;
-        mode.style.text_scale = 0.35;
-        widgets.push(mode);
-        if let Some(text) = &info.description {
-            let mut description = label(
-                "ingame_options/description",
-                414.0,
-                64.0,
-                272.0,
-                60.0,
-                0.375,
-                text,
-            );
-            description.style.font_enum = 3;
-            description.style.text_wrap = true;
-            description.style.fore_color = [1.0, 1.0, 1.0, 0.75];
-            widgets.push(description);
-        }
-        let mut map = retail_title("ingame_options/map_name", 424.0, 148.0, 240.0, &info.map);
-        map.style.text_align_mode = 4;
-        map.style.text_align_x = 4.0;
-        map.style.text_scale = 0.375;
-        widgets.push(map);
-        if let Some(icon) = &info.icon {
-            widgets.push(tinted_image(
-                "ingame_options/team",
-                -32.0,
-                94.0,
-                128.0,
-                128.0,
-                &icon.display(),
-                [1.0, 1.0, 1.0, 0.3],
-            ));
-        }
-        if let Some(compass) = &info.compass {
-            widgets.push(image(
-                "ingame_options/map",
-                424.0,
-                171.0,
-                240.0,
-                240.0,
-                compass,
-            ));
-        }
-    }
-    for (i, (id, text, cmds)) in [
-        (
-            "choose_class",
-            "Choose Class",
-            vec![ScreenCmd::Open("ingame_class".into())],
-        ),
-        ("change_team", "Change Team", vec![]),
-        ("mute_players", "Mute Players", vec![]),
-        (
-            "options",
-            "Options",
-            vec![ScreenCmd::Open("options".into())],
-        ),
-        ("favorites", "Add To Favorites", vec![]),
-        ("vote", "Call Vote", vec![]),
-        (
-            "leave",
-            "Leave Game",
-            vec![ScreenCmd::Open("leave_game".into())],
-        ),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let mut row = retail_button(
-            &format!("ingame_options/{id}"),
-            -64.0,
-            64.0 + i as f32 * 20.0,
-            text,
-            cmds,
-        );
-        if row.on_activate.is_empty() {
-            row.style.fore_color = [0.4, 0.4, 0.4, 1.0];
-            row.focusable = false;
-        }
-        widgets.push(row);
-    }
-    Screen {
-        id: "ingame_options".into(),
-        layer: UiLayer::Shell,
-        modality: Modality::Opaque,
-        background: None,
-        bed: None,
-        widgets,
-        focus_overrides: vec![],
-        on_open: vec![],
-        on_back: vec![ScreenCmd::Back],
-    }
+pub fn ingame_options(info: Option<&InGameMenuInfo>) -> Screen {
+    crate::pause::options(info)
 }
 
 pub fn leave_game() -> Screen {
@@ -3321,18 +3219,45 @@ pub fn leave_game() -> Screen {
 }
 
 fn ingame_class(host: Host<'_>) -> Screen {
-    let mut screen = ingame_options(host.match_info);
-    screen.id = "ingame_class".into();
-    screen.widgets.retain(|widget| {
-        matches!(
-            widget.id.as_str(),
-            "ingame_options/dim"
-                | "ingame_options/glow_slow"
-                | "ingame_options/glow_fast"
-                | "ingame_options/team"
-                | "ingame_options/back"
-        )
-    });
+    let mut screen = Screen {
+        id: "ingame_class".into(),
+        layer: UiLayer::Shell,
+        modality: Modality::Opaque,
+        background: None,
+        bed: None,
+        widgets: vec![dim("ingame_options/dim")],
+        focus_overrides: vec![],
+        on_open: vec![],
+        on_back: vec![ScreenCmd::Back],
+    };
+    for mut glow in retail_lobby_background("ingame_options")
+        .into_iter()
+        .filter(|w| w.id.contains("/glow_"))
+    {
+        glow.rect.horz_align = 4;
+        glow.rect.vert_align = 4;
+        screen.widgets.push(glow);
+    }
+    if let Some(icon) = host.match_info.and_then(|info| info.icon.as_ref()) {
+        screen.widgets.push(tinted_image(
+            "ingame_options/team",
+            -32.0,
+            94.0,
+            128.0,
+            128.0,
+            &icon.display(),
+            [1.0, 1.0, 1.0, 0.3],
+        ));
+    }
+    screen.widgets.push(label(
+        "ingame_options/back",
+        96.0,
+        432.0,
+        160.0,
+        20.0,
+        0.375,
+        "BACK - ESC",
+    ));
     screen.widgets.push(retail_title(
         "ingame_class/title",
         -6.0,

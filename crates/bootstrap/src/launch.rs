@@ -141,6 +141,12 @@ pub fn launch(
             }
             run_export_gltf(games, artifacts, zone);
         }
+        LaunchMode::ExportViewmodel { zone, weapon } => {
+            if acceptance.is_some() {
+                fatal("render acceptance is not available for export-viewmodel");
+            }
+            run_export_viewmodel(games, artifacts, zone, weapon);
+        }
         LaunchMode::Play {
             name,
             zone_override,
@@ -160,16 +166,7 @@ fn run_export_gltf(games: assets::GamesRoot, artifacts: PathBuf, zone_arg: Strin
             game.prefix()
         ));
     }
-    let common_mp = find_runtime_common_mp(&games, &found.path).map(|zone| zone.path);
-
-    let prepared = match bevy::tasks::futures_lite::future::block_on(assets::load_prepared_match(
-        Ok(found.path),
-        common_mp,
-        assets::LoadProgress::default(),
-    )) {
-        assets::MatchLoadOutcome::Ready(prepared) => prepared,
-        assets::MatchLoadOutcome::Canceled => fatal("export-gltf: map walk canceled"),
-    };
+    let prepared = load_export_match(&games, found.path, "export-gltf");
     let summary = assets::export_prepared_world_gltf(
         &artifacts,
         &found.zone_name,
@@ -179,6 +176,37 @@ fn run_export_gltf(games: assets::GamesRoot, artifacts: PathBuf, zone_arg: Strin
     .unwrap_or_else(|error| fatal(&format!("export-gltf: {error}")));
     diag::announce_stdout(&summary.scene.display().to_string());
     diag::announce_stdout(&summary.report_line());
+}
+
+fn run_export_viewmodel(
+    games: assets::GamesRoot,
+    artifacts: PathBuf,
+    zone_arg: String,
+    weapon: String,
+) {
+    let found = find_zone_file(&games, &zone_arg)
+        .unwrap_or_else(|error| fatal(&format!("export-viewmodel: {error}")));
+    let prepared = load_export_match(&games, found.path, "export-viewmodel");
+    let summary = assets::export_prepared_viewmodel_gltf(&artifacts, &weapon, &prepared)
+        .unwrap_or_else(|error| fatal(&format!("export-viewmodel: {error}")));
+    diag::announce_stdout(&summary.scene.display().to_string());
+    diag::announce_stdout(&summary.report_line());
+}
+
+fn load_export_match(
+    games: &assets::GamesRoot,
+    zone_path: PathBuf,
+    label: &str,
+) -> assets::PreparedMatch {
+    let common_mp = find_runtime_common_mp(games, &zone_path).map(|zone| zone.path);
+    match bevy::tasks::futures_lite::future::block_on(assets::load_prepared_match(
+        Ok(zone_path),
+        common_mp,
+        assets::LoadProgress::default(),
+    )) {
+        assets::MatchLoadOutcome::Ready(prepared) => prepared,
+        assets::MatchLoadOutcome::Canceled => fatal(&format!("{label}: map walk canceled")),
+    }
 }
 
 fn run_menu(games: assets::GamesRoot, artifacts: PathBuf) {

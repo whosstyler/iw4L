@@ -12,6 +12,10 @@ pub enum LaunchMode {
     Menu,
     Map(String),
     ExportGltf(String),
+    ExportViewmodel {
+        zone: String,
+        weapon: String,
+    },
     Play {
         name: String,
         zone_override: Option<String>,
@@ -72,7 +76,8 @@ fn parse_acceptance_flag(
     Ok((out, acceptance))
 }
 
-const USAGE: &str = "usage: iw4l [--cmds '<script>'] map <zone> | menu | play <demo>\n       iw4l export-gltf <zone>\n       iw4l --help";
+const USAGE: &str = "usage: iw4l [--cmds '<script>'] map <zone> | menu | play <demo>\n       iw4l export-gltf <zone>\n       iw4l export-viewmodel <zone> <weapon>\n       iw4l --help";
+const EXPORT_VIEWMODEL_USAGE: &str = "usage: iw4l export-viewmodel <zone> <weapon>";
 
 pub fn parse_launch_args(mut args: impl Iterator<Item = String>) -> Result<LaunchMode, String> {
     match args.next().as_deref() {
@@ -92,6 +97,14 @@ pub fn parse_launch_args(mut args: impl Iterator<Item = String>) -> Result<Launc
             }
             Ok(LaunchMode::ExportGltf(zone))
         }
+        Some("export-viewmodel") => {
+            let zone = args.next().filter(|zone| !zone.is_empty());
+            let weapon = args.next().filter(|weapon| !weapon.is_empty());
+            let (Some(zone), Some(weapon), None) = (zone, weapon, args.next()) else {
+                return Err(EXPORT_VIEWMODEL_USAGE.into());
+            };
+            Ok(LaunchMode::ExportViewmodel { zone, weapon })
+        }
         Some("menu") => {
             if args.next().is_some() {
                 return Err("usage: iw4l menu [--cmds '<script>']".into());
@@ -100,7 +113,7 @@ pub fn parse_launch_args(mut args: impl Iterator<Item = String>) -> Result<Launc
         }
         Some("play") => parse_play_args(args),
         Some(other) => Err(format!(
-            "unknown launch args starting with `{other}` — expected: map <zone> | menu | play <demo> [--cmds '<script>'] | export-gltf <zone>"
+            "unknown launch args starting with `{other}` — expected: map <zone> | menu | play <demo> [--cmds '<script>'] | export-gltf <zone> | export-viewmodel <zone> <weapon>"
         )),
         None => Err(USAGE.into()),
     }

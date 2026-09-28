@@ -6,7 +6,10 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use frame::{LifeFrontPublished, PresentedPublished, ViewSubject, WorkerCmdSet};
 use math_iw4::vec3_length;
-use net::{CgFrameClock, CgViewweaponAim, ClientSet, LocalPresentClient, PresentedSnapshot};
+use net::{
+    CgFrameClock, CgViewweaponAim, ClientActionInput, ClientSet, LocalPresentClient,
+    PresentedSnapshot,
+};
 use render_scene::{SCENE_VIEWMODEL_ENTNUM, SCENE_VIEWMODEL_FX_FLAGS, SCENE_VIEWMODEL_LEFT_ENTNUM};
 
 use crate::anim::fpv::{
@@ -18,6 +21,9 @@ use crate::anim::fpv_prepared::{FpvWeaponSlot, FpvWeaponTable, FpvWeaponView, Pr
 use crate::anim::fpv_rig::PreparedFpvRig;
 use crate::anim::scene_submission::{AnimDObjSceneSubmission, AnimSceneSubmit};
 use crate::anim::viewmodel_controller::ViewmodelController;
+use crate::anim::weapon_inspect::{
+    InspectInputs, WeaponInspect, apply_inspect_pose, inspect_pivot_local,
+};
 use crate::gaps::{RenderGap, RenderGapCause, RenderPresentationGaps};
 use crate::occupancy::remote_body::RemotePlayer;
 use crate::occupancy::third_person::presented_is_third_person;
@@ -856,6 +862,9 @@ pub fn apply_fpv_placement(
     >,
     view: Res<ViewSubject>,
     mut gfx_scene: ResMut<HostGfxScene>,
+    mut inspect: ResMut<WeaponInspect>,
+    actions: Option<Res<ClientActionInput>>,
+    bolts: Res<FpvBoltTargets>,
 ) {
     *aim = CgViewweaponAim::default();
     let Ok(mut transform) = roots.single_mut() else {
@@ -1033,14 +1042,39 @@ pub fn apply_fpv_placement(
         xhair_y: xhair[1],
         from_composed_axis: from_axis,
     };
-    let placed = iw_view_placement_to_bevy_camera_local(origin, contrib.angles);
+    let held = actions.as_ref().map(|actions| &actions.client);
+    let inspect_pose = inspect.advance(InspectInputs {
+        pressed: held.is_some_and(|c| c.kb.inspect.active || c.kb.inspect.was_pressed),
+        interrupted: held.is_some_and(|c| {
+            c.using_ads
+                || c.kb.attack.active
+                || c.kb.speed.active
+                || c.kb.melee.active
+                || c.kb.reload.active
+                || c.kb.usereload.active
+                || c.kb.frag.active
+                || c.kb.smoke.active
+        }),
+        weapon: viewmodel,
+        weaponstate: ps.weaponstate_primary,
+        weaponstate_secondary: ps.weaponstate_secondary,
+        weapon_pos_frac: ps.f_weapon_pos_frac,
+        time_ms: clock.time(),
+        dt_secs: clock.frametime_secs(),
+    });
+    let mut angles = contrib.angles;
+    if let Some(pose) = inspect_pose {
+        let pivot = inspect_pivot_local(bolts.pose[0].as_ref());
+        (origin, angles) = apply_inspect_pose(origin, angles, pivot, pose);
+    }
+    let placed = iw_view_placement_to_bevy_camera_local(origin, angles);
     let world_delta = viewweapon_view_to_world_delta(origin, kick.refdef_view_angles);
     let pose_origin = [
         kick.refdef_vieworg[0] + world_delta[0],
         kick.refdef_vieworg[1] + world_delta[1],
         kick.refdef_vieworg[2] + world_delta[2],
     ];
-    let pose_quat = scene_quat_from_viewmodel_axes(contrib.angles, kick.refdef_view_angles);
+    let pose_quat = scene_quat_from_viewmodel_axes(angles, kick.refdef_view_angles);
     gfx_scene
         .scene
         .store_pose_origin_quat(SCENE_VIEWMODEL_ENTNUM, pose_origin, Some(pose_quat));
@@ -1095,6 +1129,7 @@ pub fn register_fpv_present_systems(app: &mut App) {
         .init_resource::<SessionViewKick>()
         .init_resource::<CgGunOffset>()
         .init_resource::<CgViewweaponAim>()
+        .init_resource::<WeaponInspect>()
         .init_resource::<PendingViewHurt>()
         .init_resource::<FpvStatusGap>()
         .init_resource::<RenderPresentationGaps>()

@@ -38,6 +38,8 @@ pub enum Canvas {
     #[default]
     Standard,
     Wide,
+    /// A wide layout anchored to the actual viewport edges, including ultrawide.
+    Viewport,
 }
 
 impl Canvas {
@@ -45,7 +47,7 @@ impl Canvas {
         (width
             / match self {
                 Self::Standard => 640.0,
-                Self::Wide => 854.0,
+                Self::Wide | Self::Viewport => 854.0,
             })
         .min(height / 480.0)
     }
@@ -53,6 +55,12 @@ impl Canvas {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Style {
+    pub modern: bool,
+    pub fill_color: [f32; 4],
+    pub border_color: [f32; 4],
+    pub corner_radius: f32,
+    pub bold: bool,
+    pub letter_spacing: f32,
     pub canvas: Canvas,
     pub fore_color: [f32; 4],
     pub text_scale: f32,
@@ -161,6 +169,7 @@ pub enum SettingValue {
 #[derive(Message, Clone, Debug, PartialEq)]
 #[allow(dead_code)]
 pub enum UiIntent {
+    ResumeMatch,
     LoadMap(String),
     RefreshServers,
 

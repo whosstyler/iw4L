@@ -133,6 +133,7 @@ pub struct KbuttonSet {
     pub sprint: Kbutton,
     pub scores: Kbutton,
     pub talk: Kbutton,
+    pub inspect: Kbutton,
 }
 
 impl KbuttonSet {
@@ -197,6 +198,9 @@ impl KbuttonSet {
         if self.sprint.active || self.sprint.was_pressed {
             f("+sprint");
         }
+        if self.inspect.active || self.inspect.was_pressed {
+            f("+inspect");
+        }
     }
 
     pub fn clear_was_pressed(&mut self) {
@@ -226,6 +230,7 @@ impl KbuttonSet {
         self.sprint.was_pressed = false;
         self.scores.was_pressed = false;
         self.talk.was_pressed = false;
+        self.inspect.was_pressed = false;
     }
 }
 
@@ -325,16 +330,17 @@ pub fn cl_input_cmd(
         59 | 60 => apply_pair(&mut client.kb.sprint, cmd_id, key, now_msec, frame_msec),
         61 | 62 => apply_pair(&mut client.kb.scores, cmd_id, key, now_msec, frame_msec),
         63 | 64 => apply_pair(&mut client.kb.talk, cmd_id, key, now_msec, frame_msec),
-        65 => panic!("togglemenu not this slice"),
-        66 | 70 => client.weapon_cycles.push(cmd_id == 66),
-        67 => panic!("pause has no case 0x43 in this switch"),
-        68 | 69 => panic!("chatmodepublic/chatmodeteam Cbuf not this slice"),
-        71 => panic!("centerview pitch = -kickAngles not this slice"),
-        72 | 73 => panic!("togglecrouch/toggleprone latch xor not this slice"),
-        74 | 75 => panic!("goprone/gocrouch not this slice"),
-        76 => client.using_ads = !client.using_ads,
-        77 => cl_set_ads(client, false),
-        _ => panic!("bind-id not in the 1..77 table"),
+        65 | 66 => apply_pair(&mut client.kb.inspect, cmd_id, key, now_msec, frame_msec),
+        67 => panic!("togglemenu not this slice"),
+        68 | 72 => client.weapon_cycles.push(cmd_id == 68),
+        69 => panic!("pause has no case 0x45 in this switch"),
+        70 | 71 => panic!("chatmodepublic/chatmodeteam Cbuf not this slice"),
+        73 => panic!("centerview pitch = -kickAngles not this slice"),
+        74 | 75 => panic!("togglecrouch/toggleprone latch xor not this slice"),
+        76 | 77 => panic!("goprone/gocrouch not this slice"),
+        78 => client.using_ads = !client.using_ads,
+        79 => cl_set_ads(client, false),
+        _ => panic!("bind-id not in the 1..79 table"),
     }
 }
 

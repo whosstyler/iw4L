@@ -1,4 +1,4 @@
-pub const INPUT_COMMAND_NAMES: [&str; 78] = [
+pub const INPUT_COMMAND_NAMES: [&str; 80] = [
     "",
     "+attack",
     "-attack",
@@ -64,6 +64,8 @@ pub const INPUT_COMMAND_NAMES: [&str; 78] = [
     "-scores",
     "+talk",
     "-talk",
+    "+inspect",
+    "-inspect",
     "togglemenu",
     "weapnext",
     "pause",
@@ -79,7 +81,7 @@ pub const INPUT_COMMAND_NAMES: [&str; 78] = [
     "leaveads",
 ];
 
-pub const HOLD_PAIR_LIMIT: u32 = 0x41;
+pub const HOLD_PAIR_LIMIT: u32 = 0x43;
 
 pub const SCRIPT_KEYNUM: i32 = 0x400;
 

@@ -21,6 +21,7 @@ impl Plugin for UiPlugin {
             UiLayersPlugin,
             MenuPlugin,
             ClassSelectPlugin,
+            crate::frosted::FrostedGlassPlugin,
         ))
         .add_systems(Startup, spawn_loading_screen)
         .add_systems(

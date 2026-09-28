@@ -144,7 +144,7 @@ fn spawn_widget(
         widget.style.text_scale,
     );
     let font_atlas = retail_font.and_then(|def| {
-        if widget.id.ends_with("/context_help") {
+        if widget.style.modern || widget.id.ends_with("/context_help") {
             return None;
         }
         let stem = assets::AssetRef::bare_name(&def.material);
@@ -152,7 +152,7 @@ fn spawn_widget(
         let &(tw, th) = cache.sizes.get(stem)?;
         Some((def, handle, tw, th))
     });
-    let used_oxanium = !label.is_empty() && font_atlas.is_none();
+    let used_oxanium = !widget.style.modern && !label.is_empty() && font_atlas.is_none();
     if widget.style.text_wrap
         && let Some((font, _, _, _)) = &font_atlas
     {
@@ -185,7 +185,12 @@ fn spawn_widget(
         }
         label = wrapped;
     }
-    let font_px = (widget.style.text_scale * 48.0 * contain).clamp(8.0, 64.0);
+    let font_px = widget.style.text_scale * 48.0 * contain;
+    let font_px = if widget.style.modern {
+        font_px.max(1.0)
+    } else {
+        font_px.clamp(8.0, 64.0)
+    };
     let unsupported = matches!(widget.content, Content::Unsupported { .. });
     let mut node = parent.spawn((
         Node {
@@ -201,7 +206,10 @@ fn spawn_widget(
             },
             align_items: AlignItems::FlexStart,
             overflow: Overflow::visible(),
-            border: if unsupported {
+            border_radius: BorderRadius::all(Val::Px(widget.style.corner_radius * contain)),
+            border: if widget.style.border_color[3] > 0.0 {
+                UiRect::all(Val::Px(contain * 0.6))
+            } else if unsupported {
                 UiRect::all(Val::Px(2.0))
             } else {
                 UiRect::DEFAULT
@@ -217,6 +225,14 @@ fn spawn_widget(
         },
         WidgetControl(widget.content.clone()),
     ));
+    if widget.style.modern {
+        node.insert((
+            BackgroundColor(Color::Srgba(Srgba::from_f32_array(widget.style.fill_color))),
+            BorderColor::all(Color::Srgba(Srgba::from_f32_array(
+                widget.style.border_color,
+            ))),
+        ));
+    }
     if let Some(help) = &widget.help {
         node.insert(WidgetHelp(help.clone()));
     }
@@ -262,7 +278,9 @@ fn spawn_widget(
         node.insert((UI_PASS_FOCUS, Pickable::IGNORE));
     }
     node.with_children(|row| {
-        if widget.focusable {
+        if widget.focusable && widget.style.modern {
+            crate::pause::spawn_selection(row, contain);
+        } else if widget.focusable {
             spawn_selection_bar(row, bg_handle);
         } else if let Some(handle) = bg_handle {
             let (image_w, image_h) = if widget.style.image_contain {
@@ -350,10 +368,34 @@ fn spawn_widget(
             } else {
                 let mut text = row.spawn((
                     Text::new(label),
-                    game_text_font(font, font_px),
+                    game_text_font(font, font_px).with_font_weight(bevy::text::FontWeight(
+                        if widget.style.bold { 700 } else { 400 },
+                    )),
                     TextColor(color),
                     Node {
-                        margin: if widget.style.text_align_mode == 6 {
+                        position_type: if widget.style.modern {
+                            PositionType::Absolute
+                        } else {
+                            PositionType::Relative
+                        },
+                        left: if widget.style.modern {
+                            Val::Px(widget.style.text_align_x * contain)
+                        } else {
+                            Val::Auto
+                        },
+                        top: if widget.style.modern {
+                            Val::Px(widget.style.text_align_y * contain)
+                        } else {
+                            Val::Auto
+                        },
+                        max_width: if widget.style.modern {
+                            Val::Px(width - widget.style.text_align_x.max(0.0) * contain)
+                        } else {
+                            Val::Auto
+                        },
+                        margin: if widget.style.modern {
+                            UiRect::DEFAULT
+                        } else if widget.style.text_align_mode == 6 {
                             UiRect::right(Val::Px((-widget.style.text_align_x * contain).max(0.0)))
                         } else {
                             UiRect::left(Val::Px(8.0))
@@ -363,6 +405,11 @@ fn spawn_widget(
                     UI_PASS_FOCUS,
                     Pickable::IGNORE,
                 ));
+                if widget.style.modern {
+                    text.insert(bevy::text::LetterSpacing::Px(
+                        widget.style.letter_spacing * contain,
+                    ));
+                }
                 if widget.id.ends_with("/context_help") {
                     text.insert(FocusHelpText);
                 }
@@ -732,6 +779,24 @@ pub(crate) fn place_rect(
         return (0.0, 0.0, win_w, win_h);
     }
     let scale = canvas.scale(win_w, win_h);
+    if canvas == crate::model::Canvas::Viewport {
+        let x = match rect.horz_align {
+            3 => win_w,
+            2 => win_w * 0.5,
+            _ => 0.0,
+        };
+        let y = match rect.vert_align {
+            3 => win_h,
+            2 => win_h * 0.5,
+            _ => 0.0,
+        };
+        return (
+            x + rect.x * scale,
+            y + rect.y * scale,
+            rect.w * scale,
+            rect.h * scale,
+        );
+    }
     let ox = (win_w - 640.0 * scale) * 0.5;
     let oy = (win_h - 480.0 * scale) * 0.5;
     let mut x = rect.x;
@@ -820,6 +885,14 @@ impl MenuImageCache {
             );
             self.sizes
                 .insert(stem.to_owned(), (image.width, image.height));
+            return;
+        }
+        if let Some((width, height, pixels)) = crate::pause::generated_image(stem) {
+            self.handles.insert(
+                stem.to_owned(),
+                images.add(rgba_ui_image(width, height, pixels)),
+            );
+            self.sizes.insert(stem.to_owned(), (width, height));
             return;
         }
         let Some(games) = games else {

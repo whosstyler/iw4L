@@ -13,6 +13,7 @@ frame.workspace = true
 net = { path = "../net" }
 session.workspace = true
 sim.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [lints]
 workspace = true

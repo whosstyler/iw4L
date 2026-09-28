@@ -147,6 +147,8 @@ impl Plugin for MenuPlugin {
                         play_focus_sound,
                         handle_menu_back,
                         handle_retail_clicks,
+                        crate::pause::resume_match,
+                        crate::pause::refresh_match_details,
                         drive_ingame_class,
                         crate::options::edit_player_name,
                         crate::class_setup::edit_class_name,

@@ -100,11 +100,15 @@ pub(crate) fn spawn_retail_shell(
     let mut match_info = screens::InGameMenuInfo::default();
     if in_game {
         if let Some(identity) = paint.identity.as_deref() {
+            match_info.zone = identity.zone.clone();
             let key = format!(
                 "MPUI_{}",
                 identity.zone.trim_start_matches("mp_").to_uppercase()
             );
-            match_info.map = loc.text(&key).unwrap_or(&identity.zone).to_owned();
+            match_info.map = loc
+                .text(&key)
+                .map(str::to_owned)
+                .unwrap_or_else(|| identity.zone.trim_start_matches("mp_").replace('_', " "));
             let icons = paint.team_settings.as_deref().map(|icons| icons.0.clone());
             if let (Some(icons), Some(snapshot), Some(local)) = (
                 icons,
@@ -125,6 +129,29 @@ pub(crate) fn spawn_retail_shell(
             .as_deref()
             .and_then(|c| c.declaration.image.clone());
         if let Some(snapshot) = paint.presented.as_deref().and_then(|p| p.snapshot()) {
+            match_info.score_limit = Some(snapshot.meta.score_limit);
+            match_info.time_limit_ms = Some(snapshot.meta.time_limit_ms);
+            match_info.players = snapshot
+                .meta
+                .clients
+                .iter()
+                .map(|(_, meta)| {
+                    let end = meta
+                        .name
+                        .iter()
+                        .position(|byte| *byte == 0)
+                        .unwrap_or(meta.name.len());
+                    screens::PausePlayer {
+                        name: String::from_utf8_lossy(&meta.name[..end]).into_owned(),
+                        score: meta.score,
+                        kills: meta.kills,
+                        deaths: meta.deaths,
+                    }
+                })
+                .collect();
+            match_info
+                .players
+                .sort_by(|a, b| b.score.cmp(&a.score).then(a.deaths.cmp(&b.deaths)));
             match_info.mode = snapshot.meta.kind.display_name().to_owned();
             let objective = match snapshot.meta.kind.token() {
                 "dm" => Some("OBJECTIVES_DM"),
@@ -716,7 +743,8 @@ pub(crate) fn handle_retail_clicks(
                 | UiIntent::CacCancelRename
                 | UiIntent::CacCancelEdit
                 | UiIntent::Disconnect
-                | UiIntent::SelectClass(_)),
+                | UiIntent::SelectClass(_)
+                | UiIntent::ResumeMatch),
             ) = cmd
             {
                 writers.intents.write(intent.clone());
@@ -794,12 +822,26 @@ pub(crate) fn handle_menu_back(
         if back && *occupancy.screen == frame::AppScreen::InGame {
             stack.names.push("ingame_options".into());
             occupancy.enabled.0 = true;
-            focus.widget = Some("ingame_options/choose_class".into());
+            focus.widget = Some("ingame_options/resume".into());
         }
         return;
     }
     if *occupancy.screen == frame::AppScreen::ClassSelect {
         return;
+    }
+    if stack.names.last().map(String::as_str) == Some("ingame_options") {
+        let target = if keys.just_pressed(KeyCode::F1) {
+            Some("pause_map")
+        } else if keys.just_pressed(KeyCode::F2) {
+            Some("pause_social")
+        } else {
+            None
+        };
+        if let Some(target) = target {
+            stack.names.push(target.into());
+            focus.widget = None;
+            return;
+        }
     }
     if back && stack.names.last().map(String::as_str) == Some("ingame_options") {
         stack.names.pop();

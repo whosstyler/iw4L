@@ -276,7 +276,10 @@ pub use fx_catalog::{
 };
 pub use fx_model_catalog::{FxModelCatalog, FxModelEntry};
 pub use glass_catalog::{FxGlassReset, GlassZoneCensus, build_fx_glass_reset, build_glass_census};
-pub use gltf_export::{GltfExportSummary, export_prepared_world_gltf};
+pub use gltf_export::{
+    GltfExportSummary, ViewmodelExportSummary, export_prepared_viewmodel_gltf,
+    export_prepared_world_gltf,
+};
 pub use impact_fx_catalog::{ImpactFxCatalog, OwnedFxImpactEntry, OwnedFxImpactTable};
 pub use iw5_tech_map::{
     IW5_CODE_COLOR_SATURATION_B, IW5_CODE_COLOR_SATURATION_G, IW5_CODE_COLOR_SATURATION_R,
